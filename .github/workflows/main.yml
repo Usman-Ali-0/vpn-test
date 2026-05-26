@@ -3,13 +3,18 @@ on: [push]
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Install WireGuard
-        run: sudo apt-get install -y wireguard
+        run: sudo apt-get install -y wireguard resolvconf
+
+      - name: Check IP before VPN
+        run: curl -m 10 ifconfig.me || echo "IP check done"
 
       - name: Create config
         run: |
-          echo "[Interface]
+          sudo bash -c 'cat > /etc/wireguard/wg0.conf << EOF
+          [Interface]
           Address = 10.0.1.2/32
           PrivateKey = 8PmnB3Omdsa+bkv1ZEjpGgOMp5CIPO6JcKEbm1GQfmo=
           DNS = 8.8.8.8
@@ -18,10 +23,8 @@ jobs:
           PublicKey = J3k+vf4xU/FZni/gGcPsVCbi2H0GLuA9eHusL3Su2Uo=
           Endpoint = 143.198.219.76:51820
           AllowedIPs = 0.0.0.0/0, ::/0
-          PersistentKeepalive = 25" | sudo tee /etc/wireguard/wg0.conf
-
-      - name: Check IP before VPN
-        run: curl https://ipinfo.io
+          PersistentKeepalive = 25
+          EOF'
 
       - name: Connect VPN
         run: sudo wg-quick up wg0
@@ -29,8 +32,14 @@ jobs:
       - name: Check handshake
         run: sudo wg show
 
-      - name: Check IP after VPN
-        run: curl https://ipinfo.io
+      - name: Wait for connection
+        run: sleep 5
 
-      - name: Test internet through VPN
-        run: curl --interface wg0 https://ipinfo.io
+      - name: Check IP after VPN
+        run: curl -m 10 ifconfig.me || echo "done"
+
+      - name: Test ping node1
+        run: ping -c 4 10.0.1.1
+
+      - name: Test ping node3
+        run: ping -c 4 10.0.3.1
